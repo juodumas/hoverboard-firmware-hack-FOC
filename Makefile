@@ -95,7 +95,7 @@ C_DEFS =  \
 AS_INCLUDES =
 
 # C includes
-C_INCLUDES =  \
+C_INCLUDES +=  \
 -IInc \
 -IDrivers/STM32F1xx_HAL_Driver/Inc \
 -IDrivers/STM32F1xx_HAL_Driver/Inc/Legacy \
@@ -106,7 +106,7 @@ C_INCLUDES =  \
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
 
-CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections -std=gnu11
+CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) $(CFLAGS_EXTRA) -Wall -fdata-sections -ffunction-sections -std=gnu11
 
 ifeq ($(DEBUG), 1)
 CFLAGS += -g -gdwarf-2
@@ -114,6 +114,13 @@ endif
 
 # Generate dependency information
 CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)"
+
+# Choose board from env var:
+# make -e BOARD=AT32
+ifeq ($(BOARD), AT32)
+CFLAGS += -D BOARD_AT32=1
+BUILD_DIR = build-at32
+endif
 
 # Choose variant from env var
 # make -e VARIANT=VARIANT_ADC
@@ -175,8 +182,12 @@ format:
 clean:
 	-rm -fR .dep $(BUILD_DIR)
 
-flash:
-	st-flash --reset write $(BUILD_DIR)/$(TARGET).bin 0x8000000
+flash: $(BUILD_DIR)/$(TARGET).hex
+	@if [ $(BOARD) = "AT32" ]; then \
+		openocd -f interface/stlink-v2.cfg -f target/stm32f3x.cfg -c init -c "reset halt" -c "stm32f1x unlock 0" -c "flash write_image erase $(BUILD_DIR)/$(TARGET).hex 0 ihex" -c "shutdown"; \
+	else \
+		st-flash --reset write $(BUILD_DIR)/$(TARGET).bin 0x8000000; \
+	fi
 
 unlock:
 	openocd -f interface/stlink-v2.cfg -f target/stm32f1x.cfg -c init -c "reset halt" -c "stm32f1x unlock 0"

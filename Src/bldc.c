@@ -61,6 +61,7 @@ uint8_t buzzerFreq          = 0;
 uint8_t buzzerPattern       = 0;
 static uint32_t buzzerTimer = 0;
 
+uint8_t        enablePrev   = 0;        // initially motors are disabled for SAFETY
 uint8_t        enable       = 0;        // initially motors are disabled for SAFETY
 static uint8_t enableFin    = 0;
 
@@ -96,6 +97,9 @@ void DMA1_Channel1_IRQHandler(void) {
     offsetdcr = (adc_buffer.dcr + offsetdcr) / 2;
     return;
   }
+  else if (enablePrev == 0 && enable == 1) {  // reset offset before every enable
+    offsetcount = 0;
+  }
 
   if (buzzerTimer % 1000 == 0) {  // because you get float rounding errors if it would run every time -> not any more, everything converted to fixed-point
     filtLowPass32(adc_buffer.batt1, BAT_FILT_COEF, &batVoltageFixdt);
@@ -103,8 +107,15 @@ void DMA1_Channel1_IRQHandler(void) {
   }
 
   // Get Left motor currents
+  #if defined(BOARD_AT32)
+  // My AT32 board: switched A/B for left side.
+  curL_phaA = (int16_t)(offsetrlB - adc_buffer.rlB);
+  curL_phaB = (int16_t)(offsetrlA - adc_buffer.rlA);
+  #else
+  // STM32
   curL_phaA = (int16_t)(offsetrlA - adc_buffer.rlA);
   curL_phaB = (int16_t)(offsetrlB - adc_buffer.rlB);
+  #endif
   curL_DC   = (int16_t)(offsetdcl - adc_buffer.dcl);
   
   // Get Right motor currents
@@ -150,6 +161,7 @@ void DMA1_Channel1_IRQHandler(void) {
 
   /* Make sure to stop BOTH motors in case of an error */
   enableFin = enable && !rtY_Left.z_errCode && !rtY_Right.z_errCode;
+  enablePrev = enable;
  
   // ========================= LEFT MOTOR ============================ 
     // Get hall sensors values
